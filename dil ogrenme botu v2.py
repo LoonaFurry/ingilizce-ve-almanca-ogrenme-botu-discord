@@ -38,7 +38,7 @@ max_wrong_attempts = 1000  # Limit for wrong attempts
 # Sample flashcards dictionary (Replace with your actual data)
 flash_cards = {
     'en': {
-        "chamomile": "papatya",
+            "chamomile": "papatya",
             "Eccentricity": "Eksantriklik",
             "eccentric": "eksantrik",
             "consecutive": "ardışık",
@@ -17591,9 +17591,10 @@ flash_cards = {
             "Advocate": "Avukat",
             "Accommodate": "Karşılamak",
             "Abstract": "Soyut"
+        # ... (rest of your English flashcards)
     },
     'de': {
-         "Schau": "Bakmak",
+            "Schau": "Bakmak",
             "Guck": "Bakmak",
             "Spinnt": "Döndürmeler",
             "wofür": "Ne için",
@@ -26023,6 +26024,7 @@ flash_cards = {
             "Stimmt": "Doğru",
             "teuer": "masraflı",
             "Deutschen": "Almanlar"
+        # ... (rest of your German flashcards)
     }
 }
 
@@ -26114,7 +26116,12 @@ async def ask_question(channel, user=None):
         correct_answer_position = random.randint(1, 4)
 
         # Ensure unique choices
-        choices = random.sample(list(flash_cards[lang].values()), 3)
+        if len(list(flash_cards[lang].values())) >= 3:
+            choices = random.sample(list(flash_cards[lang].values()), 3)
+        else:
+            await channel.send(f"Not enough flashcards for {lang}! Please add more words.")
+            return
+
         choices.insert(correct_answer_position - 1, meaning)
 
         current_questions[user.id] = {
@@ -26131,7 +26138,7 @@ async def ask_question(channel, user=None):
     await channel.send(question_text)
 
 async def handle_word_response(message, word):
-    lang = user_languages.get(message.author.id, 'en') 
+    lang = user_languages.get(message.author.id, 'en')
     word = word.lower().strip()
 
     if message.author.id in current_questions:
@@ -26167,7 +26174,14 @@ async def handle_word_response(message, word):
             if best_match and highest_ratio >= 80:
                 for flash_word, meaning in flash_cards[lang].items():
                     if meaning == best_match:
-                        await message.channel.send(f"The meaning of the word **{flash_word}** is: {meaning}")
+                        if re.match(r'^[^\w\s]+$', message.content) or re.match(r'^[0-9]+$', message.content):
+                            await message.channel.send(f"The meaning of the word **{flash_word}** is: {meaning}. Please reply with a word or a number.")
+                        else:
+                            # Check for misspelled words
+                            if word != meaning:
+                                await message.channel.send(f"The meaning of the word **{flash_word}** is: {meaning}. You wrote '{word}'. Please next time be more careful!.")
+                            else:
+                                await message.channel.send(f"The meaning of the word **{flash_word}** is: {meaning}")
                         if message.author.id in current_questions:
                             del current_questions[message.author.id]
                             await ask_question(message.channel, message.author)

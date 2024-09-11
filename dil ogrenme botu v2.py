@@ -8,6 +8,7 @@ from nltk.tokenize import word_tokenize
 from nltk.stem import WordNetLemmatizer
 import asyncio
 from fuzzywuzzy import fuzz
+from discord import app_commands
 
 # Initialize the lemmatizer
 lemmatizer = WordNetLemmatizer()
@@ -38,7 +39,7 @@ max_wrong_attempts = 1000  # Limit for wrong attempts
 # Sample flashcards dictionary (Replace with your actual data)
 flash_cards = {
     'en': {
-            "chamomile": "papatya",
+     "chamomile": "papatya",
             "Eccentricity": "Eksantriklik",
             "eccentric": "eksantrik",
             "consecutive": "ardışık",
@@ -17591,10 +17592,9 @@ flash_cards = {
             "Advocate": "Avukat",
             "Accommodate": "Karşılamak",
             "Abstract": "Soyut"
-        # ... (rest of your English flashcards)
     },
     'de': {
-            "Schau": "Bakmak",
+        "Schau": "Bakmak",
             "Guck": "Bakmak",
             "Spinnt": "Döndürmeler",
             "wofür": "Ne için",
@@ -26024,7 +26024,6 @@ flash_cards = {
             "Stimmt": "Doğru",
             "teuer": "masraflı",
             "Deutschen": "Almanlar"
-        # ... (rest of your German flashcards)
     }
 }
 
@@ -26052,23 +26051,23 @@ def find_best_match(word, choices):
             best_match = choice
     return best_match, highest_ratio
 
-async def learn(message):
-    user_id = message.author.id
+async def learn(interaction: discord.Interaction):
+    user_id = interaction.user.id
     
     if user_learning_states.get(user_id) == 'selecting_language':
-        await message.channel.send("You are already in the process of selecting a language.")
+        await interaction.response.send_message("You are already in the process of selecting a language.")
         return
     
     user_learning_states[user_id] = 'selecting_language'
-    await message.channel.send("Do you want to learn English or German today? Please reply with '1' for English, '2' for German, or type 'English' or 'German'.")
+    await interaction.response.send_message("Do you want to learn English or German today? Please reply with '1' for English, '2' for German, or type 'English' or 'German'.")
 
     def check(msg):
-        return msg.author == message.author and msg.channel == message.channel
+        return msg.author == interaction.user and msg.channel == interaction.channel
 
     try:
         response = await bot.wait_for('message', timeout=60.0, check=check)
     except asyncio.TimeoutError:
-        await message.channel.send("You took too long to respond. Please use the !learn command again.")
+        await interaction.channel.send_message("You took too long to respond. Please use the /learn command again.")
         user_learning_states.pop(user_id, None)
         return
 
@@ -26080,7 +26079,7 @@ async def learn(message):
     elif best_match in ['2', 'german']:
         lang = 'de'
     else:
-        await message.channel.send("Invalid choice. Please try again.")
+        await interaction.response.send_message("Invalid choice. Please try again.")
         user_learning_states.pop(user_id, None)
         return
     
@@ -26089,11 +26088,11 @@ async def learn(message):
     user_last_active[user_id] = asyncio.get_event_loop().time()
 
     if not flash_cards.get(lang):
-        await message.channel.send("Flashcards are not available at the moment.")
+        await interaction.response.send_message("Flashcards are not available at the moment.")
         return
     
-    await message.channel.send(f"Lesson started in {'English' if lang == 'en' else 'German'}! Questions will be sent to you in this channel.")
-    await ask_question(message.channel, message.author)
+    await interaction.response.send_message(f"Lesson started in {'English' if lang == 'en' else 'German'}! Questions will be sent to you in this channel.")
+    await ask_question(interaction.channel, interaction.user)
 
 async def ask_question(channel, user=None):
     if user is None:
@@ -26101,7 +26100,7 @@ async def ask_question(channel, user=None):
     
     lang = user_languages.get(user.id, 'en') 
     if not flash_cards.get(lang):
-        await channel.send("Flashcards are not available at the moment.")
+        await channel.send_message("Flashcards are not available at the moment.")
         return
     
     question_data = current_questions.get(user.id)
@@ -26119,7 +26118,7 @@ async def ask_question(channel, user=None):
         if len(list(flash_cards[lang].values())) >= 3:
             choices = random.sample(list(flash_cards[lang].values()), 3)
         else:
-            await channel.send(f"Not enough flashcards for {lang}! Please add more words.")
+            await channel.send_message(f"Not enough flashcards for {lang}! Please add more words.")
             return
 
         choices.insert(correct_answer_position - 1, meaning)
@@ -26135,7 +26134,7 @@ async def ask_question(channel, user=None):
     question_text = f"What is the meaning of the word: **{word}**?\n\n"
     question_text += '\n'.join([f"{i+1}️⃣ {choices[i]}" for i in range(4)])
     
-    await channel.send(question_text)
+    await channel.send_message(question_text)
 
 async def handle_word_response(message, word):
     lang = user_languages.get(message.author.id, 'en')
@@ -26211,48 +26210,28 @@ async def check_inactivity():
                 user_last_active.pop(user_id, None)
 
 @bot.event
-async def on_message(message):
-    if message.author == bot.user:
-        return
-
-    user_last_active[message.author.id] = asyncio.get_event_loop().time()
-
-    # Handle language settings and commands regardless of active questions
-    if message.content.lower() in ['en', 'english']:
-        user_languages[message.author.id] = 'en'
-        await message.channel.send("Language set to English.")
-    elif message.content.lower() in ['de', 'german']:
-        user_languages[message.author.id] = 'de'
-        await message.channel.send("Language set to German.")
-    elif message.content.startswith('!learn'):
-        await learn(message)
-    elif message.content.startswith('!quit'):
-        await quit(message)
-
-    # Process answers only if a question is active
-    elif message.author.id in current_questions: 
-        if message.content.isdigit() or re.match(r'^[A-Za-z]+$', message.content):
-            await handle_word_response(message, message.content)
-        else:
-            if re.match(r'^[^\w\s]+$', message.content) or re.match(r'^[0-9]+$', message.content):
-                await message.channel.send("Invalid response. Please reply with a number between 1 and 4 or a word.")
-                await ask_question(message.channel, message.author)
-
-@bot.event
 async def on_ready():
     print(f'Logged in as {bot.user.name}')
     bot.loop.create_task(check_inactivity())
 
-async def quit(message):
-    user_id = message.author.id
+async def quit(interaction: discord.Interaction):
+    user_id = interaction.user.id
     if user_id in user_languages:
         del user_languages[user_id]
     if user_id in user_learning_states:
         del user_learning_states[user_id]
     if user_id in current_questions:
         del current_questions[user_id]
-    await message.channel.send("You have exited the learning session.")
+    await interaction.response.send_message("You have exited the learning session.")
 
+# Slash Komutlarını Tanımlama
+@bot.tree.command(name="learn", description="Yeni bir dil öğrenme dersine başla.")
+async def learn_command(interaction: discord.Interaction):
+    await learn(interaction)
+
+@bot.tree.command(name="quit", description="Öğrenme dersini bırak.")
+async def quit_command(interaction: discord.Interaction):
+    await quit(interaction)
 
 # Botunuzu başlatın
-bot.run('your-token-here')
+bot.run('your-toke-here') # Tokenınızı buraya ekleyin

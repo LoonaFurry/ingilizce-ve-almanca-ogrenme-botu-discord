@@ -9,6 +9,7 @@ from nltk.stem import WordNetLemmatizer
 import asyncio
 from fuzzywuzzy import fuzz
 from discord import app_commands
+nltk.download('wordnet')
 
 # Initialize the lemmatizer
 lemmatizer = WordNetLemmatizer()
